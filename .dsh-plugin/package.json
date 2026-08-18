@@ -1,0 +1,32 @@
+{
+  "name": "dsh-monitor",
+  "version": "0.1.0",
+  "description": "Session-internal progress monitor for long-running tool calls, background jobs, subagents and workflows — draggable floating panel with progress bars and ETA.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {},
+  "dsh": {
+    "minVersion": "0.1.0",
+    "profile": {
+      "bundles": [
+        "dsh-monitor"
+      ]
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/client.js"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "dsh-monitor",
+  "version": "0.1.0",
+  "description": "Session-internal progress monitor for Oh-DSH Desktop: draggable floating panel tracking long-running tool calls, background jobs, subagents and workflows with progress bars and ETA.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/client.js"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "monitor",
+    "progress",
+    "cordial"
+  ]
+}
