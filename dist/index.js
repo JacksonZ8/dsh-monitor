@@ -1,14 +1,15 @@
-// dsh-monitor host half (Node side)
+// dsh-monitor host half (Node process)
 //
 // Tracks in-flight work — model tool calls, background jobs, subagents and
-// workflows — in a process-local store, derives progress/ETA, and serves a
-// lossless-JSON snapshot the client half renders.
+// workflows — in a process-local store, derives progress/ETA, and exposes a
+// lossless-JSON snapshot over an HTTP route the browser half polls.
 //
-// This mirrors the proven dynamic-plugin logic (moni-1/pkg-4) adapted to the
-// desktop-plugin bundle shape. The store is keyed purely by strings and only
-// leaf scalars ever leave it (no live Service/Session objects).
+// Per the official plugin guide: the host half owns the data; the browser
+// half fetches it through an `/xxx/*` route registered with `webServer`.
 
-function createMonitorStore(ctx) {
+export const name = 'dsh-monitor'
+
+export function apply(ctx) {
   const tasks = new Map()
   let seq = 0
 
@@ -97,7 +98,7 @@ function createMonitorStore(ctx) {
   // ---- background jobs ----
   const jobs = ctx.get('jobs')
   if (jobs) {
-    function reflectJobs() {
+    const reflectJobs = () => {
       let list = []
       try { list = jobs.list() || [] } catch (e) { list = [] }
       const seen = new Set()
@@ -198,13 +199,17 @@ function createMonitorStore(ctx) {
     }, 10000)
   })
 
-  return { snapshot }
-}
-
-export function apply(ctx) {
-  const store = createMonitorStore(ctx)
-  // Publish a read-only face for the client half (and any test) to consume.
-  ctx.provide('dshMonitor', Object.freeze({
-    snapshot: () => store.snapshot(),
-  }))
+  // ---- data bridge: HTTP route the browser half polls ----
+  const webServer = ctx.get('webServer')
+  if (webServer) {
+    webServer.register({
+      kind: 'exact',
+      path: '/dsh-monitor/snapshot',
+      handler: (req, res) => {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.setHeader('Cache-Control', 'no-store')
+        res.end(JSON.stringify(snapshot()))
+      },
+    })
+  }
 }

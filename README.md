@@ -1,10 +1,9 @@
 # dsh-monitor
 
-Session-internal progress monitor for **Oh-DSH Desktop** (DeepSeek Harness).
-
-A draggable floating panel that live-tracks long-running work in the current
-session — model tool calls, background jobs, subagents, and workflows — with
-elapsed time, status, and (for workflows) a progress bar plus an ETA estimate.
+Session-internal progress monitor for **DeepSeek Harness (DSH)** — a draggable
+floating panel that live-tracks long-running work in the current session:
+model tool calls, background jobs, subagents, and workflows, with elapsed time,
+status, and (for workflows) a progress bar plus an ETA estimate.
 
 ## What it shows
 
@@ -22,49 +21,43 @@ panel header to move it; the position is remembered in `localStorage`.
 
 ```
 dsh-monitor/
-├── package.json              # npm package (the `dsh-monitor` bundle)
+├── package.json              # npm package + DSH bundle (`dsh.bundle.patch` + `dsh.client`)
+├── cordis.patch.yml          # bundle layer: inserts the `dsh-monitor` host row
 ├── .dsh-plugin/
-│   └── package.json          # marketplace manifest (dsh.profile + dsh.client)
+│   └── package.json          # Oh-DSH Desktop marketplace manifest
 └── dist/
-    ├── index.js              # host half: event listeners + progress store
-    └── client.js             # client half: draggable floating panel UI
+    ├── index.js              # host half: event listeners → store → HTTP route
+    └── client.js             # browser half: window.__ModuleLoader__ panel factory
 ```
 
-The marketplace manifest at `.dsh-plugin/package.json` is what the Oh-DSH
-Desktop catalog and transaction manager read. `dsh.profile.bundles` points at
-`dsh-monitor` (this npm package), which carries both the host half
-(`dist/index.js`) and the browser half (`dist/client.js` through the `dsh.client`
-declaration).
+This is a **dual-half plugin** per the official `dsh-plugin-tutorial`:
+
+- **Host half** (`dist/index.js`, `exports["."]`) listens to `tools/*`,
+  `jobs`, `subagent/*`, and `workflow/*`, maintains a process-local store, and
+  serves a lossless JSON snapshot at `GET /dsh-monitor/snapshot` via the
+  `webServer` service.
+- **Browser half** (`dist/client.js`, `exports["./client"]`) is a
+  `window.__ModuleLoader__.load({ id, factory })` closure that registers a
+  React panel into `shell.overlay` and polls that route.
 
 ## Install
 
 ```bash
-dsh plugin add dsh-monitor
+# DSH CLI (registry/bundle path)
+dsh plugin --profile web add ./dsh-monitor
+dsh --profile web
+
+# or via the Oh-DSH Desktop marketplace once the catalog has picked up
+# this repository (see `.dsh-plugin/package.json`).
 ```
 
-or install through the Oh-DSH Desktop plugin marketplace once the catalog has
-picked up this repository.
+## Notes
 
-## Status & remaining work (read this before relying on it)
-
-The monitor logic is a port of a fully working dynamic-plugin implementation
-and keeps the same event sources and progress math. Two integration points are
-**not yet end-to-end verified** against this deployment's desktop-plugin
-host↔client contract, because that contract lives inside the Electron main
-process and is not part of the readable runtime source:
-
-1. **Host→client service bridge** — `dist/index.js` publishes `ctx.provide('dshMonitor', …)`
-   and `dist/client.js` reads it with `ctx.get('dshMonitor')`. Confirm the
-   desktop bundle actually wires a browser `ctx.get` to the host-side provider
-   (some desktop shapes require a Remote descriptor instead of a raw service).
-2. **`dsh.client` `inject` spec** — pin the exact `inject` list (currently
-   `@deepseek-ai/dsh-client-runtime`) and `platform`/`immediately` values to
-   the deployment's `dsh-client-modules` contract.
-
-Until those two are verified, treat the bundle as **structurally complete but
-integration-pending**. The `.dsh-plugin/package.json` already satisfies the
-manifest schema (`name`, `dependencies`, `dsh.profile`, `dsh.client`) the
-desktop transaction manager validates.
+- `dsh.bundle.patch` → `cordis.patch.yml` inserts one host row
+  (`id: dsh-monitor`, `name: dsh-monitor`).
+- Browser half `id` MUST equal package `name` (`dsh-monitor`).
+- `shell.overlay` is a `list` slot, so the panel adds a fresh id beside the
+  shipped entries rather than replacing anything.
 
 ## License
 

@@ -1,25 +1,41 @@
 {
   "name": "dsh-monitor",
   "version": "0.1.0",
-  "description": "Session-internal progress monitor for Oh-DSH Desktop: draggable floating panel tracking long-running tool calls, background jobs, subagents and workflows with progress bars and ETA.",
+  "description": "Session-internal progress monitor for DeepSeek Harness: draggable floating panel tracking long-running tool calls, background jobs, subagents and workflows with progress bars and ETA.",
   "license": "MIT",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
     "./client": "./dist/client.js",
     "./package.json": "./package.json"
   },
   "files": [
-    "dist/index.js",
-    "dist/client.js"
+    "dist",
+    "cordis.patch.yml"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
     "monitor",
     "progress",
-    "cordial"
+    "cordis"
   ]
 }
