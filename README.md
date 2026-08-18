@@ -1,12 +1,12 @@
 # dsh-monitor
 
-> 会话内进度监视器：可拖动的悬浮面板，实时追踪长时间运行的工具调用、后台任务、子代理与工作流，显示耗时、状态，并为工作流给出进度条与预计完成时间。
-> A session-internal progress monitor: a draggable floating panel that live-tracks long-running tool calls, background jobs, subagents and workflows, with elapsed time, status, and — for workflows — a progress bar and ETA.
+> 会话内进度监视器：可拖动的悬浮面板，只追踪长时间、多批次的工作——后台任务与工作流，显示耗时、状态，并为工作流给出进度条、`done/total` 计数与动态预计完成时间。
+> A session-internal progress monitor: a draggable floating panel that tracks only long, multi-batch work — background jobs and workflows — with elapsed time, status, and, for workflows, a progress bar, a `done/total` count and a live ETA.
 
 Session-internal progress monitor for **DeepSeek Harness (DSH)** — a draggable
-floating panel that live-tracks long-running work in the current session:
-model tool calls, background jobs, subagents, and workflows, with elapsed time,
-status, and (for workflows) a progress bar plus an ETA estimate.
+floating panel that tracks only long-running, multi-batch work: background jobs
+and workflows, with elapsed time, status, and (for workflows) a progress bar,
+a `done/total` count, and a live ETA estimate.
 
 ## What it shows
 
