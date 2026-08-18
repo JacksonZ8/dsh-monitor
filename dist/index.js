@@ -9,7 +9,13 @@
 
 export const name = 'dsh-monitor'
 
+// Hard dependencies: the webserver (for the data route) and the timer mixin
+// (for the prune interval). `jobs` stays optional via ctx.get('jobs').
+export const inject = ['webServer', 'timer']
+
 export function apply(ctx) {
+  const webServer = ctx.webServer
+  const timer = ctx.timer
   const tasks = new Map()
   let seq = 0
 
@@ -189,9 +195,7 @@ export function apply(ctx) {
 
   // prune finished tasks older than 60s
   ctx.effect(() => {
-    const t = ctx.get('timer')
-    if (!t) return undefined
-    return t.interval(() => {
+    return timer.interval(() => {
       const cutoff = now() - 60 * 1000
       for (const [k, v] of tasks) {
         if (v.status !== 'running' && (v.endedAt || 0) < cutoff) tasks.delete(k)
@@ -200,16 +204,13 @@ export function apply(ctx) {
   })
 
   // ---- data bridge: HTTP route the browser half polls ----
-  const webServer = ctx.get('webServer')
-  if (webServer) {
-    webServer.register({
-      kind: 'exact',
-      path: '/dsh-monitor/snapshot',
-      handler: (req, res) => {
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.setHeader('Cache-Control', 'no-store')
-        res.end(JSON.stringify(snapshot()))
-      },
-    })
-  }
+  webServer.register({
+    kind: 'exact',
+    path: '/dsh-monitor/snapshot',
+    handler: (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-store')
+      res.end(JSON.stringify(snapshot()))
+    },
+  })
 }
