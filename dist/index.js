@@ -1,16 +1,21 @@
 // dsh-monitor host half (Node process)
 //
-// Tracks in-flight work — model tool calls, background jobs, subagents and
-// workflows — in a process-local store, derives progress/ETA, and exposes a
-// lossless-JSON snapshot over an HTTP route the browser half polls.
+// Focus: long-running, multi-batch tasks — background jobs and workflows.
+// Ordinary model tool calls (read/write/grep/…) are deliberately NOT tracked.
 //
-// Per the official plugin guide: the host half owns the data; the browser
-// half fetches it through an `/xxx/*` route registered with `webServer`.
+// Progress + ETA source (workflow explicit protocol):
+//   - a workflow opts into progress by logging `dsh-monitor:total=N` (or
+//     `log('progress:total=N')`) once, before fanning out its batches;
+//   - every `agent()` call in that workflow counts as one unit of work, so
+//     `workflow/agent-end` advances `done`, and progress = done / total;
+//   - ETA is extrapolated from elapsed time at the current progress fraction.
+//   - Without an explicit total, we fall back to `meta.phases.length` when the
+//     script declared phases, otherwise no progress bar (elapsed only).
+//
+// The browser half polls the `/dsh-monitor/snapshot` route below.
 
 export const name = 'dsh-monitor'
 
-// Hard dependencies: the webserver (for the data route) and the timer mixin
-// (for the prune interval). `jobs` stays optional via ctx.get('jobs').
 export const inject = ['webServer', 'timer']
 
 export function apply(ctx) {
@@ -45,6 +50,8 @@ export function apply(ctx) {
         elapsedMs: elapsed,
         progress,
         etaMs,
+        done: v.done ?? null,
+        total: v.total ?? null,
       })
     }
     arr.sort((a, b) => {
@@ -57,7 +64,7 @@ export function apply(ctx) {
   function upsert(key, patch) {
     let v = tasks.get(key)
     if (!v) {
-      v = { key, kind: 'tool', label: '', status: 'running', startedAt: now(), endedAt: 0, detail: '', progress: null }
+      v = { key, kind: 'job', label: '', status: 'running', startedAt: now(), endedAt: 0, detail: '', progress: null, done: null, total: null }
       tasks.set(key, v)
     }
     if (patch) {
@@ -72,6 +79,7 @@ export function apply(ctx) {
       v.status = 'done'
       v.endedAt = now()
       v.progress = 1
+      if (typeof v.done === 'number' && typeof v.total === 'number') v.done = v.total
       if (detail !== undefined && detail !== '') v.detail = detail
     }
   }
@@ -85,23 +93,7 @@ export function apply(ctx) {
     }
   }
 
-  // ---- model tool calls ----
-  ctx.on('tools/pre-execute', (exec, next) => {
-    const name = exec && exec.name ? String(exec.name) : 'tool'
-    upsert('tool:' + name + ':' + (++seq), {
-      kind: 'tool',
-      label: name === 'bash' ? '命令' : name,
-      status: 'running',
-    })
-    return next()
-  })
-  ctx.on('tools/result', () => {
-    for (const v of tasks.values()) {
-      if (v.kind === 'tool' && v.status === 'running') { finish(v.key); return }
-    }
-  })
-
-  // ---- background jobs ----
+  // ---- background jobs (only these surfaces; ordinary tool calls excluded) ----
   const jobs = ctx.get('jobs')
   if (jobs) {
     const reflectJobs = () => {
@@ -146,46 +138,84 @@ export function apply(ctx) {
     reflectJobs()
   }
 
-  // ---- subagents ----
-  ctx.on('subagent/start', (info) => {
-    const id = info && info.id ? String(info.id) : 'sub:' + (++seq)
-    const label = info && info.label ? String(info.label) : '子代理'
-    upsert('sub:' + id, { kind: 'subagent', label, status: 'running' })
-  })
-  ctx.on('subagent/end', (info) => {
-    const id = info && info.id ? String(info.id) : ''
-    if (id) finish('sub:' + id)
-  })
+  // ---- workflows: explicit progress protocol ----
+  // keyed by workflow id: { total, done }
+  const wf = new Map()
 
-  // ---- workflows (progress + ETA via phase titles) ----
-  const wfMeta = new Map()
   ctx.on('workflow/start', (info) => {
     const id = info && info.id ? String(info.id) : 'wf:' + (++seq)
     const name = info && info.meta && info.meta.name ? String(info.meta.name) : '工作流'
     const phases = info && info.meta && Array.isArray(info.meta.phases) ? info.meta.phases : []
-    wfMeta.set(id, {
-      phaseCount: phases.length,
-      phaseTitles: phases.map((p) => (p && p.title ? String(p.title) : '')),
+    const total = phases.length > 0 ? phases.length : null
+    wf.set(id, { total, done: 0 })
+    upsert('wf:' + id, {
+      kind: 'workflow',
+      label: name,
+      status: 'running',
+      detail: '',
+      progress: total ? 0 : null,
+      done: 0,
+      total,
     })
-    upsert('wf:' + id, { kind: 'workflow', label: name, status: 'running', detail: '', progress: phases.length > 0 ? 0 : null })
   })
+
+  ctx.on('workflow/log', (info, message) => {
+    const id = info && info.id ? String(info.id) : ''
+    if (!id) return
+    const msg = message ? String(message) : ''
+    // explicit protocol: `dsh-monitor:total=N` (also accept `progress:total=N`)
+    const m = msg.match(/(?:dsh-monitor|progress)\s*:\s*total\s*=\s*(\d+)/i)
+    if (m) {
+      const total = parseInt(m[1], 10)
+      const rec = wf.get(id)
+      if (rec && total > 0) {
+        rec.total = total
+        const v = tasks.get('wf:' + id)
+        if (v) {
+          v.total = total
+          v.done = rec.done
+          v.progress = total > 0 ? Math.min(0.999, rec.done / total) : null
+          v.detail = `0/${total}`
+        }
+      }
+    } else {
+      // narrate the latest log line as detail (bounded, no carriage noise)
+      const v = tasks.get('wf:' + id)
+      if (v) v.detail = msg.slice(0, 120)
+    }
+  })
+
+  ctx.on('workflow/agent-end', (info) => {
+    const id = info && info.id ? String(info.id) : ''
+    if (!id) return
+    const rec = wf.get(id)
+    if (!rec) return
+    rec.done += 1
+    const v = tasks.get('wf:' + id)
+    if (v) {
+      v.done = rec.done
+      if (rec.total && rec.total > 0) {
+        v.progress = Math.min(0.999, rec.done / rec.total)
+        v.detail = rec.done + '/' + rec.total
+      } else {
+        v.detail = rec.done + ' 完成'
+      }
+    }
+  })
+
   ctx.on('workflow/phase', (info, title) => {
     const id = info && info.id ? String(info.id) : ''
     if (!id) return
     const t = title ? String(title) : ''
     const v = tasks.get('wf:' + id)
-    const m = wfMeta.get(id)
-    if (v) v.detail = t
-    if (m && m.phaseCount > 0) {
-      const idx = m.phaseTitles.indexOf(t)
-      if (idx >= 0 && v) v.progress = Math.min(0.99, (idx + 1) / m.phaseCount)
-    }
+    if (v && t) v.detail = '阶段: ' + t
   })
+
   ctx.on('workflow/end', (info, result) => {
     const id = info && info.id ? String(info.id) : ''
     if (!id) return
     const v = tasks.get('wf:' + id)
-    wfMeta.delete(id)
+    wf.delete(id)
     if (v) {
       const stop = result && result.stopReason ? String(result.stopReason) : ''
       if (stop === 'error') fail(v.key, result && result.error ? String(result.error) : stop)
@@ -203,7 +233,7 @@ export function apply(ctx) {
     }, 10000)
   })
 
-  // ---- data bridge: HTTP route the browser half polls ----
+  // ---- data bridge ----
   webServer.register({
     kind: 'exact',
     path: '/dsh-monitor/snapshot',

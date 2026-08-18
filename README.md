@@ -10,15 +10,31 @@ status, and (for workflows) a progress bar plus an ETA estimate.
 
 ## What it shows
 
+Only **long-running, multi-batch work** — ordinary model tool calls are
+deliberately NOT tracked:
+
 | Kind | Source | Progress / ETA |
 | --- | --- | --- |
-| 工具 `tool` | model tool calls (`bash`, `write`, `read`, …) | elapsed + status only |
-| 任务 `job` | background jobs (foreground/background `bash`, `subagent`) | elapsed + status + detail |
-| 子代理 `subagent` | `subagent` / `subagent_fork` children | elapsed + status |
-| 工作流 `workflow` | multi-stage `workflow` runs | **progress bar + % + 剩余≈ ETA** from `meta.phases` / `phase()` |
+| 任务 `job` | background jobs (`run_in_background` bash / subagent) | elapsed + status + detail |
+| 工作流 `workflow` | multi-batch `workflow` runs | **progress bar + `done/total` + 剩余≈ ETA** via the explicit protocol below |
+
+### Workflow progress protocol
+
+A workflow opt into a progress bar by logging its total batch count once,
+before fanning out:
+
+```js
+log('dsh-monitor:total=42')   // or log('progress:total=42')
+```
+
+Every `agent()` call in that workflow then counts as one completed unit, so
+the monitor shows `3/42` with a bar and an ETA extrapolated from elapsed time
+at the current fraction. Without an explicit total, the monitor falls back to
+`meta.phases.length` when phases are declared, otherwise elapsed only.
 
 The pill collapses to a small badge in the bottom-right. Drag the pill or the
-panel header to move it; the position is remembered in `localStorage`.
+panel header to move it; the position is remembered in `localStorage`
+(double-click the pill to reset it).
 
 ## Repository layout
 
@@ -35,13 +51,13 @@ dsh-monitor/
 
 This is a **dual-half plugin** per the official `dsh-plugin-tutorial`:
 
-- **Host half** (`dist/index.js`, `exports["."]`) listens to `tools/*`,
-  `jobs`, `subagent/*`, and `workflow/*`, maintains a process-local store, and
-  serves a lossless JSON snapshot at `GET /dsh-monitor/snapshot` via the
-  `webServer` service.
+- **Host half** (`dist/index.js`, `exports["."]`) listens to `jobs` and
+  `workflow/*` (not ordinary tool calls), maintains a process-local store,
+  derives progress/ETA, and serves a lossless JSON snapshot at
+  `GET /dsh-monitor/snapshot` via the `webServer` service.
 - **Browser half** (`dist/client.js`, `exports["./client"]`) is a
   `window.__ModuleLoader__.load({ id, factory })` closure that registers a
-  React panel into `shell.overlay` and polls that route.
+  draggable React panel into `shell.overlay` and polls that route.
 
 ## Install
 
