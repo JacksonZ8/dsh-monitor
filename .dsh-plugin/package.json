@@ -1,7 +1,7 @@
 {
-  "name": "dsh-monitor",
+  "name": "dsh-progress-monitor",
   "version": "0.1.0",
-  "description": "Session-internal progress monitor for DeepSeek Harness: draggable floating panel tracking long-running tool calls, background jobs, subagents and workflows with progress bars and ETA.",
+  "description": "Session-internal progress monitor for DeepSeek Harness: draggable floating panel tracking long-running background jobs and workflows with progress bars, a done/total count and a live ETA.",
   "license": "MIT",
   "type": "module",
   "dependencies": {},
@@ -12,7 +12,7 @@
     },
     "profile": {
       "bundles": [
-        "dsh-monitor"
+        "dsh-progress-monitor"
       ]
     },
     "client": {

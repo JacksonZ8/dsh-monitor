@@ -1,16 +1,16 @@
-# dsh-monitor bundle layer — applied when a profile lists this bundle
+# dsh-progress-monitor bundle layer — applied when a profile lists this bundle
 # (package.json declares `dsh.bundle.patch` pointing at this file).
 #
 # `name` is a PACKAGE NAME (resolved through the profile's node_modules or the
 # installation fallback $DSH_HOME/profiles/node_modules), NOT a relative path.
-# `dsh-monitor` is this package's main entry (→ dist/index.js, the host half).
+# `dsh-progress-monitor` is this package's main entry (→ dist/index.js, the host half).
 #
 # `webServer` + `timer` are declared as hard dependencies so the host half
 # applies only after the webserver service is ready — it registers an HTTP
 # route on `ctx.webServer`, and needs `ctx.timer` for the prune interval.
 - insert:
-    - id: dsh-monitor
-      name: dsh-monitor
+    - id: dsh-progress-monitor
+      name: dsh-progress-monitor
       inject:
         - webServer
         - timer

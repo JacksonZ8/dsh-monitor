@@ -1,14 +1,14 @@
-// dsh-monitor browser half (Web UI process)
+// dsh-progress-monitor browser half (Web UI process)
 //
 // Draggable floating panel in `shell.overlay`, polling the host half's
-// `/dsh-monitor/snapshot` route. Shows background jobs + workflows with a
+// `/dsh-progress-monitor/snapshot` route. Shows background jobs + workflows with a
 // progress bar and a live ETA estimate.
 //
 // Self-registering closure factory (id === package name). React is provided
 // by the shell module table.
 
 window.__ModuleLoader__.load({
-  id: 'dsh-monitor',
+  id: 'dsh-progress-monitor',
   factory: (require) => {
     const React = require('react')
 
@@ -76,13 +76,13 @@ window.__ModuleLoader__.load({
         }
         const loadPos = () => {
           try {
-            const raw = localStorage.getItem('dsh-monitor.pos')
+            const raw = localStorage.getItem('dsh-progress-monitor.pos')
             if (raw) { const p = JSON.parse(raw); if (typeof p.x === 'number' && typeof p.y === 'number') return p }
           } catch (e) {}
           return null
         }
         const savePos = (x, y) => {
-          try { localStorage.setItem('dsh-monitor.pos', JSON.stringify({ x, y })) } catch (e) {}
+          try { localStorage.setItem('dsh-progress-monitor.pos', JSON.stringify({ x, y })) } catch (e) {}
         }
 
         const ProgressBar = (it) => {
@@ -115,7 +115,7 @@ window.__ModuleLoader__.load({
             let alive = true
             const poll = async () => {
               try {
-                const r = await fetch('/dsh-monitor/snapshot')
+                const r = await fetch('/dsh-progress-monitor/snapshot')
                 if (!r.ok) return
                 const s = await r.json()
                 if (alive) setSnap(s)
@@ -150,7 +150,7 @@ window.__ModuleLoader__.load({
             document.addEventListener('mousemove', onMove)
             document.addEventListener('mouseup', onUp)
           }
-          const resetPos = () => { setPos({ x: null, y: null }); try { localStorage.removeItem('dsh-monitor.pos') } catch (e) {} }
+          const resetPos = () => { setPos({ x: null, y: null }); try { localStorage.removeItem('dsh-progress-monitor.pos') } catch (e) {} }
 
           const items = snap.items || []
           const runningCount = items.filter((i) => i.status === 'running').length
@@ -195,7 +195,7 @@ window.__ModuleLoader__.load({
         }
 
         slots.register(
-          { name: 'shell.overlay', id: 'dsh-monitor', order: 100 },
+          { name: 'shell.overlay', id: 'dsh-progress-monitor', order: 100 },
           () => React.createElement(Monitor),
         )
       },

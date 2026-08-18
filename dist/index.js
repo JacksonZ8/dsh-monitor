@@ -1,10 +1,10 @@
-// dsh-monitor host half (Node process)
+// dsh-progress-monitor host half (Node process)
 //
 // Focus: long-running, multi-batch tasks — background jobs and workflows.
 // Ordinary model tool calls (read/write/grep/…) are deliberately NOT tracked.
 //
 // Progress + ETA source (workflow explicit protocol):
-//   - a workflow opts into progress by logging `dsh-monitor:total=N` (or
+//   - a workflow opts into progress by logging `progress:total=N` (or
 //     `log('progress:total=N')`) once, before fanning out its batches;
 //   - every `agent()` call in that workflow counts as one unit of work, so
 //     `workflow/agent-end` advances `done`, and progress = done / total;
@@ -12,9 +12,9 @@
 //   - Without an explicit total, we fall back to `meta.phases.length` when the
 //     script declared phases, otherwise no progress bar (elapsed only).
 //
-// The browser half polls the `/dsh-monitor/snapshot` route below.
+// The browser half polls the `/dsh-progress-monitor/snapshot` route below.
 
-export const name = 'dsh-monitor'
+export const name = 'dsh-progress-monitor'
 
 export const inject = ['webServer', 'timer']
 
@@ -163,8 +163,8 @@ export function apply(ctx) {
     const id = info && info.id ? String(info.id) : ''
     if (!id) return
     const msg = message ? String(message) : ''
-    // explicit protocol: `dsh-monitor:total=N` (also accept `progress:total=N`)
-    const m = msg.match(/(?:dsh-monitor|progress)\s*:\s*total\s*=\s*(\d+)/i)
+    // explicit protocol: `progress:total=N` (legacy `dsh-monitor:total=N` still accepted)
+    const m = msg.match(/(?:progress|dsh-progress-monitor|dsh-monitor)\s*:\s*total\s*=\s*(\d+)/i)
     if (m) {
       const total = parseInt(m[1], 10)
       const rec = wf.get(id)
@@ -236,7 +236,7 @@ export function apply(ctx) {
   // ---- data bridge ----
   webServer.register({
     kind: 'exact',
-    path: '/dsh-monitor/snapshot',
+    path: '/dsh-progress-monitor/snapshot',
     handler: (req, res) => {
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
       res.setHeader('Cache-Control', 'no-store')
